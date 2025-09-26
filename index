@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>App Kehadiran — Guru & Admin (v1.1)</title>
+<style>
+:root{--bg:#f6f9ff;--ink:#0b1b2b;--muted:#667085;--card:#fff;--border:#e6eef8;--accent:#2563eb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--ink)}
+.container{max-width:1100px;margin:auto;padding:1rem}
+h1{margin:.2rem 0 1rem 0;font-size:1.5rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1rem;box-shadow:0 8px 22px rgba(10,45,90,.06);margin-bottom:1rem}
+.row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+label{display:flex;flex-direction:column;gap:.35rem;font-size:.95rem}
+input,select,button,textarea{font:inherit;padding:.6rem .8rem;border-radius:.6rem;border:1px solid var(--border)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.ghost{background:transparent}
+.hint{color:var(--muted);font-size:.9rem}
+.grid{display:grid;gap:.7rem}
+@media (min-width:840px){.grid-2{grid-template-columns:1fr 1fr}}
+table{border-collapse:collapse;width:100%}th,td{padding:.55rem .6rem;border-bottom:1px solid var(--border);text-align:left}
+th{background:#f1f5ff;position:sticky;top:0;z-index:1}
+.badge{display:inline-block;padding:.2rem .5rem;border:1px solid var(--border);border-radius:.5rem;background:#f8fafc}
+.tbl-wrap{max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:.6rem}
+code{background:#eef3ff;padding:.1rem .3rem;border-radius:.3rem}
+.small{font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>App Kehadiran — <span class="hint">Guru & Admin (v1.1: sebab standard, cap masa, kunci kelas)</span></h1>
+
+  <section class="card">
+    <div class="row">
+      <label>Mod
+        <select id="mode"><option value="guru">Guru</option><option value="admin">Admin</option></select>
+      </label>
+      <label>Tarikh
+        <input id="date" type="date">
+      </label>
+      <label>Nama Guru (opsyenal)
+        <input id="teacher" placeholder="Contoh: Cikgu Aisyah">
+      </label>
+      <div class="row">
+        <label>Kunci Kelas pada Peranti Ini
+          <select id="lockClass"></select>
+        </label>
+        <button id="clearLock" class="ghost">Buka Kunci</button>
+      </div>
+      <div class="hint">Data disimpan di peranti ini (localStorage). Guna <strong>Kongsi/Emel Admin</strong> untuk hantar salinan.</div>
+    </div>
+  </section>
+
+  <section class="grid grid-2">
+    <!-- GURU -->
+    <article class="card" id="guruPanel">
+      <h3 style="margin:.2rem 0">Mod Guru</h3>
+      <div class="row">
+        <label>Kelas
+          <select id="kelas"></select>
+        </label>
+        <span class="badge">Enrolmen: <span id="enrol">0</span></span>
+        <span class="badge small">Disimpan: <span id="savedAt">—</span></span>
+      </div>
+      <div class="tbl-wrap" style="margin-top:.6rem">
+        <table id="tblGuru">
+          <thead><tr><th>#</th><th>Nama Murid</th><th>Kehadiran</th><th>Sebab (jika Tidak Hadir)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:.6rem">
+        <button id="markAllHadir">Tanda Semua Hadir</button>
+        <button id="saveGuru" class="primary">Simpan Hari Ini</button>
+        <button id="exportGuru">Eksport CSV (Hari Ini)</button>
+        <button id="shareGuru">Kongsi/Emel Admin</button>
+        <button id="resetGuru" class="ghost">Reset Borang</button>
+      </div>
+      <div class="hint">Fail CSV guru mengandungi rekod murid (hadir/tidak hadir & sebab) + kelas, tarikh, enrolmen, nama guru.</div>
+    </article>
+
+    <!-- ADMIN -->
+    <article class="card" id="adminPanel" style="display:none">
+      <h3 style="margin:.2rem 0">Mod Admin</h3>
+      <div class="row">
+        <label>Import Fail CSV Guru (boleh pilih banyak)
+          <input id="adminFiles" type="file" accept=".csv" multiple>
+        </label>
+        <button id="clearAdmin" class="ghost">Kosongkan Import</button>
+      </div>
+      <div class="tbl-wrap" style="margin-top:.6rem">
+        <table id="tblAdmin">
+          <thead><tr><th>Kelas</th><th>Hadir</th><th>Enrolmen</th><th>% Hadir (semasa)</th><th>Jumlah Tidak Hadir</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:.6rem">
+        <button id="exportAdmin">Eksport CSV (Format Ringkasan)</button>
+      </div>
+      <details style="margin-top:.6rem">
+        <summary><strong>Senarai Sebab Tidak Hadir (mengikut kelas)</strong></summary>
+        <div id="absentDetails" class="tbl-wrap" style="margin-top:.6rem">
+          <table id="tblAbsent">
+            <thead><tr><th>Kelas</th><th>Nama Murid</th><th>Sebab</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </details>
+      <div class="hint" style="margin-top:.5rem">Eksport ringkasan admin ikut format app sebelum ini: <code>kelas, tarikh, hadir, enrolmen</code> (tarikh = YYYY-MM-DD).</div>
+    </article>
+  </section>
+
+  <section class="card">
+    <h3 style="margin:.2rem 0">Pengurusan Senarai Murid (Semua Kelas)</h3>
+    <div class="row">
+      <button id="addClass">Tambah Kelas</button>
+      <button id="importRoster">Import Roster CSV</button>
+      <button id="exportRoster">Eksport Roster CSV</button>
+      <button id="resetRoster" class="ghost">Reset ke Contoh</button>
+    </div>
+    <div class="grid" id="rosterWrap" style="margin-top:.7rem"></div>
+    <div class="hint">Format CSV roster: <code>kelas,nama</code> (satu murid setiap baris).</div>
+  </section>
+</div>
+
+<script>
+(function(){
+  const KEY="attendance_app_v11";
+  const KEY_LOCK="attendance_lock_class";
+  const KEY_TCH="attendance_teacher_name";
+  const $=id=>document.getElementById(id);
+  const todayStr=()=>new Date().toISOString().slice(0,10);
+
+  // ====== Data ======
+  let db=load()||seed();
+  function seed(){
+    return {
+      roster:{
+        "1 Marwah":["Ali","Aina","Aqil","Balqis","Danial"],
+        "1 Safa":["Faris","Hana","Irfan","Mika","Sofia"],
+        "2 Raudhah":["Akmal","Nadia","Sara"]
+      },
+      attendance:{} // key: date::class -> {date, class, teacher, savedAt, records:[{name, hadir(0/1), sebab}]}
+    };
+  }
+  function save(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||''); }catch(e){ return null; } }
+
+  // ====== UI init ======
+  $('date').value = todayStr();
+  $('teacher').value = localStorage.getItem(KEY_TCH)||'';
+  renderRoster();
+  fillKelasOptions();
+  initLock();
+  renderGuruTable();
+
+  // ====== Mode toggle ======
+  $('mode').addEventListener('change',()=>{
+    const isGuru = $('mode').value==='guru';
+    $('guruPanel').style.display = isGuru? 'block':'none';
+    $('adminPanel').style.display = isGuru? 'none':'block';
+  });
+
+  // ====== Roster Management ======
+  function renderRoster(){
+    const wrap=$('rosterWrap'); wrap.innerHTML='';
+    Object.keys(db.roster).sort((a,b)=>a.localeCompare(b,'ms')).forEach(kelas=>{
+      const div=document.createElement('div'); div.className='card';
+      div.innerHTML=`<div class="row" style="justify-content:space-between">
+        <strong>${kelas}</strong>
+        <div class="row">
+          <button data-k="${kelas}" class="addStu">Tambah Murid</button>
+          <button data-k="${kelas}" class="delClass">Padam Kelas</button>
+        </div>
+      </div>
+      <div style="margin-top:.4rem">
+        <textarea data-k="${kelas}" class="ta" spellcheck="false">${db.roster[kelas].join('\n')}</textarea>
+      </div>`;
+      wrap.appendChild(div);
+    });
+    wrap.querySelectorAll('.ta').forEach(ta=>{
+      ta.addEventListener('input',e=>{
+        const k=e.target.getAttribute('data-k');
+        const names=e.target.value.split('\n').map(s=>s.trim()).filter(Boolean);
+        db.roster[k]=names; save(); if($('kelas').value===k) renderGuruTable();
+      });
+    });
+    wrap.querySelectorAll('.addStu').forEach(btn=>btn.onclick=e=>{
+      const k=e.target.getAttribute('data-k'); db.roster[k].push('Nama Baharu'); save(); renderRoster(); if($('kelas').value===k) renderGuruTable();
+    });
+    wrap.querySelectorAll('.delClass').forEach(btn=>btn.onclick=e=>{
+      const k=e.target.getAttribute('data-k'); if(!confirm('Padam kelas '+k+'?')) return;
+      delete db.roster[k]; save(); renderRoster(); fillKelasOptions(); renderGuruTable();
+    });
+  }
+
+  $('addClass').onclick=()=>{
+    const k=prompt('Nama kelas baharu? (cth: 1 Amanah)'); if(!k) return;
+    if(db.roster[k]) return alert('Kelas sudah wujud.');
+    db.roster[k]=[]; save(); renderRoster(); fillKelasOptions(); refreshLockList();
+  };
+
+  $('importRoster').onclick=()=>{
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='.csv';
+    inp.onchange=()=>{
+      const f=inp.files[0]; if(!f) return;
+      const r=new FileReader(); r.onload=()=>{
+        const lines=r.result.split(/\r?\n/).filter(Boolean);
+        for(const line of lines){
+          const [kelas,name]=line.split(',').map(s=>(s||'').trim());
+          if(!kelas||!name) continue;
+          if(!db.roster[kelas]) db.roster[kelas]=[];
+          if(!db.roster[kelas].includes(name)) db.roster[kelas].push(name);
+        }
+        save(); renderRoster(); fillKelasOptions(); renderGuruTable(); refreshLockList();
+      }; r.readAsText(f);
+    }; inp.click();
+  };
+
+  $('exportRoster').onclick=()=>{
+    let lines=['kelas,nama'];
+    Object.keys(db.roster).forEach(k=>{
+      db.roster[k].forEach(n=>lines.push(`${csvEsc(k)},${csvEsc(n)}`));
+    });
+    downloadBlob(lines.join('\n'),'roster.csv','text/csv');
+  };
+
+  $('resetRoster').onclick=()=>{ if(confirm('Kembali ke roster contoh?')){ db=seed(); save(); renderRoster(); fillKelasOptions(); renderGuruTable(); refreshLockList(); } };
+
+  function fillKelasOptions(){
+    const sel=$('kelas'); sel.innerHTML=''; const keys=Object.keys(db.roster).sort((a,b)=>a.localeCompare(b,'ms'));
+    keys.forEach(k=>{ const opt=document.createElement('option'); opt.value=k; opt.textContent=k; sel.appendChild(opt); });
+    if(keys.length) sel.value=keys[0];
+    $('enrol').textContent = sel.value? (db.roster[sel.value]?.length||0) : 0;
+  }
+  $('kelas').addEventListener('change',()=>{ $('enrol').textContent = db.roster[$('kelas').value]?.length||0; renderGuruTable(); });
+
+  // ====== Lock Class per device ======
+  function initLock(){
+    refreshLockList();
+    const locked = localStorage.getItem(KEY_LOCK)||'';
+    if(locked && db.roster[locked]){
+      $('lockClass').value = locked;
+      applyLock(locked);
+    }
+  }
+  function refreshLockList(){
+    const sel=$('lockClass'); sel.innerHTML='';
+    const opt0=document.createElement('option'); opt0.value=''; opt0.textContent='(Tiada kunci — semua kelas)'; sel.appendChild(opt0);
+    Object.keys(db.roster).sort((a,b)=>a.localeCompare(b,'ms')).forEach(k=>{
+      const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o);
+    });
+  }
+  $('lockClass').addEventListener('change',()=>{
+    const v=$('lockClass').value;
+    if(v){
+      localStorage.setItem(KEY_LOCK, v);
+      applyLock(v);
+    }else{
+      localStorage.removeItem(KEY_LOCK);
+      applyLock('');
+    }
+  });
+  $('clearLock').onclick=()=>{
+    localStorage.removeItem(KEY_LOCK);
+    applyLock('');
+    $('lockClass').value='';
+  };
+  function applyLock(kelas){
+    const locked = !!kelas;
+    $('kelas').disabled = locked;
+    if(locked){
+      if(db.roster[kelas]){$('kelas').value=kelas; $('enrol').textContent = db.roster[kelas].length;}
+    }
+    renderGuruTable();
+  }
+
+  // ====== Guru ======
+  const REASONS = ["Sakit","Urusan Keluarga","Cuti","Menanggu","Ponteng","Lewat","Aktiviti Luar","Lain-lain"];
+  function renderGuruTable(){
+    const kelas=$('kelas').value; const tbody=document.querySelector('#tblGuru tbody'); tbody.innerHTML='';
+    const names=(db.roster[kelas]||[]).slice(); names.sort((a,b)=>a.localeCompare(b,'ms'));
+    const key=attKey($('date').value, kelas);
+    const pack=db.attendance[key];
+    $('savedAt').textContent = pack? fmtTime(pack.savedAt) : '—';
+    const existing=pack?.records||[]; const map=new Map(existing.map(r=>[r.name,r]));
+    let i=1;
+    for(const nm of names){
+      const rec=map.get(nm)||{name:nm,hadir:1, sebab:''};
+      const tr=document.createElement('tr');
+      const reasonSel = `<select data-name="${esc(nm)}" class="reasonSel">${REASONS.map(x=>`<option ${rec.sebab && REASONS.includes(rec.sebab)?(rec.sebab===x?'selected':''): (x==='Lain-lain'?'selected':'')}>${x}</option>`).join('')}</select>`;
+      const reasonText = `<input data-name="${esc(nm)}" class="sebabText" placeholder="Nyatakan sebab..." value="${!REASONS.includes(rec.sebab)?esc(rec.sebab):''}" ${ (rec.sebab && !REASONS.includes(rec.sebab)) ? '' : 'style="display:none"' }>`;
+      tr.innerHTML=`<td>${i++}</td><td>${esc(nm)}</td>
+        <td><select data-name="${esc(nm)}" class="hadir">
+          <option value="1" ${rec.hadir? 'selected':''}>Hadir</option>
+          <option value="0" ${rec.hadir? '':'selected'}>Tidak Hadir</option>
+        </select></td>
+        <td>${reasonSel} ${reasonText}</td>`;
+      tbody.appendChild(tr);
+    }
+    tbody.querySelectorAll('.reasonSel').forEach(sel=>{
+      sel.addEventListener('change', e=>{
+        const wrapRow = e.target.closest('tr');
+        const txt = wrapRow.querySelector('.sebabText');
+        if(e.target.value==='Lain-lain'){ txt.style.display='inline-block'; txt.focus(); }
+        else { txt.value=''; txt.style.display='none'; }
+      });
+    });
+  }
+  $('date').addEventListener('change',renderGuruTable);
+
+  $('markAllHadir').onclick=()=>{
+    document.querySelectorAll('#tblGuru select.hadir').forEach(sel=>sel.value='1');
+  };
+
+  $('resetGuru').onclick=()=>{ renderGuruTable(); };
+
+  $('teacher').addEventListener('input',()=>{
+    localStorage.setItem(KEY_TCH, $('teacher').value||'');
+  });
+
+  $('saveGuru').onclick=()=>{
+    const kelas=$('kelas').value, date=$('date').value;
+    if(!kelas||!date) return alert('Pastikan tarikh & kelas dipilih.');
+    const recs=[];
+    document.querySelectorAll('#tblGuru tbody tr').forEach(tr=>{
+      const name=tr.querySelector('.hadir').getAttribute('data-name');
+      const hadir=parseInt(tr.querySelector('.hadir').value,10)||0;
+      const sel=tr.querySelector('.reasonSel'); const selVal=sel.value;
+      const txt=tr.querySelector('.sebabText'); const txtVal=(txt.value||'').trim();
+      const reason = selVal==='Lain-lain' ? txtVal : (selVal||'');
+      recs.push({name,hadir,sebab: reason});
+    });
+    const key=attKey(date, kelas);
+    db.attendance[key]={date, class:kelas, teacher: ($('teacher').value||''), savedAt:new Date().toISOString(), records:recs};
+    save();
+    $('savedAt').textContent = fmtTime(db.attendance[key].savedAt);
+    alert('Disimpan untuk '+kelas+' pada '+date+'.');
+  };
+
+  $('exportGuru').onclick=()=>{
+    const kelas=$('kelas').value, date=$('date').value; if(!kelas||!date) return alert('Pilih tarikh & kelas.');
+    const key=attKey(date,kelas); const pack=db.attendance[key]; if(!pack) return alert('Sila simpan dahulu.');
+    const enrol= (db.roster[kelas]?.length)||0;
+    let lines=['tarikh,kelas,murid,hadir,sebab,enrolmen,guru,saved_at'];
+    pack.records.forEach(r=>lines.push([date,kelas,r.name,r.hadir,r.sebab,enrol,(pack.teacher||''),(pack.savedAt||'')].map(csvEsc).join(',')));
+    downloadBlob(lines.join('\n'),`guru_${kelas}_${date}.csv`,'text/csv');
+  };
+
+  $('shareGuru').onclick=async()=>{
+    const kelas=$('kelas').value, date=$('date').value; if(!kelas||!date) return alert('Pilih tarikh & kelas.');
+    const key=attKey(date,kelas); const pack=db.attendance[key]; if(!pack) return alert('Sila simpan dahulu.');
+    const enrol= (db.roster[kelas]?.length)||0;
+    const csv=['tarikh,kelas,murid,hadir,sebab,enrolmen,guru,saved_at'].concat(
+      pack.records.map(r=>[date,kelas,r.name,r.hadir,r.sebab,enrol,(pack.teacher||''),(pack.savedAt||'')].map(csvEsc).join(','))
+    ).join('\n');
+    const filename=`guru_${kelas}_${date}.csv`;
+    try{
+      const file=new File([csv], filename, {type:'text/csv'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:'Data Kehadiran', text:`Kelas ${kelas} — ${date}`});
+        return;
+      }
+    }catch(err){/* fallback below */}
+    downloadBlob(csv, filename, 'text/csv');
+    alert('CSV dimuat turun. Sila lampirkan fail ke emel admin secara manual.');
+  };
+
+  function attKey(date,kelas){ return date+'::'+kelas; }
+
+  // ====== Admin ======
+  let adminRows=[]; // baris gabungan dari fail CSV guru
+  $('adminFiles').addEventListener('change',e=>{
+    adminRows=[];
+    const files=[...e.target.files]; if(!files.length) return;
+    let remaining=files.length;
+    files.forEach(f=>{
+      const r=new FileReader();
+      r.onload=()=>{
+        const rows=parseCSV(r.result);
+        rows.forEach(obj=>adminRows.push(obj));
+        remaining--; if(remaining===0){ renderAdminTables(); }
+      };
+      r.readAsText(f);
+    });
+  });
+
+  $('clearAdmin').onclick=()=>{ $('adminFiles').value=''; adminRows=[]; renderAdminTables(); };
+
+  function renderAdminTables(){
+    const tbody=$('tblAdmin').querySelector('tbody'); tbody.innerHTML='';
+    const abody=$('tblAbsent').querySelector('tbody'); abody.innerHTML='';
+    if(!adminRows.length) return;
+
+    const date=$('date').value;
+    const byClass={};
+    adminRows.filter(r=>normalizeDate(r['tarikh'])===date).forEach(r=>{
+      const k=r['kelas']; if(!byClass[k]) byClass[k]={hadir:0,enrol:0,absents:[]};
+      const hadir=+r['hadir']||0; const enrol=+r['enrolmen']||0;
+      byClass[k].hadir += hadir;
+      byClass[k].enrol = Math.max(byClass[k].enrol, enrol);
+      if(!hadir){ byClass[k].absents.push({murid:r['murid'], sebab:r['sebab']||''}); }
+    });
+
+    Object.keys(byClass).sort((a,b)=>a.localeCompare(b,'ms')).forEach(k=>{
+      const s=byClass[k]; const p= s.enrol? Math.round((s.hadir/s.enrol)*100):0;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${esc(k)}</td><td>${s.hadir}</td><td>${s.enrol}</td><td>${p}%</td><td>${s.absents.length}</td>`;
+      tbody.appendChild(tr);
+      s.absents.forEach(a=>{
+        const r=document.createElement('tr');
+        r.innerHTML=`<td>${esc(k)}</td><td>${esc(a.murid)}</td><td>${esc(a.sebab)}</td>`;
+        abody.appendChild(r);
+      });
+    });
+  }
+
+  $('exportAdmin').onclick=()=>{
+    const date=$('date').value; if(!date) return alert('Pilih tarikh.');
+    const byClass={};
+    adminRows.filter(r=>normalizeDate(r['tarikh'])===date).forEach(r=>{
+      const k=r['kelas']; if(!byClass[k]) byClass[k]={hadir:0,enrol:0};
+      byClass[k].hadir += (+r['hadir']||0);
+      byClass[k].enrol = Math.max(byClass[k].enrol, (+r['enrolmen']||0));
+    });
+    const lines=['kelas,tarikh,hadir,enrolmen'];
+    Object.keys(byClass).sort((a,b)=>a.localeCompare(b,'ms')).forEach(k=>{
+      const s=byClass[k]; lines.push([k,date,s.hadir,s.enrol].map(csvEsc).join(','));
+    });
+    downloadBlob(lines.join('\n'),`ringkasan_${date}.csv`,'text/csv');
+  };
+
+  // ====== Helpers ======
+  function csvEsc(s){ s=(s==null?'':String(s)); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }
+  function downloadBlob(content, filename, type){
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type:type||'text/plain'}));
+    a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+  }
+  function parseCSV(text){
+    const lines=text.split(/\r?\n/).filter(Boolean);
+    const head=lines.shift().split(',').map(h=>h.trim().toLowerCase());
+    return lines.map(line=>{
+      const cells=parseCSVRow(line);
+      const obj={}; head.forEach((h,i)=>obj[h]=cells[i]??''); return obj;
+    });
+  }
+  function parseCSVRow(line){
+    const out=[]; let cur=''; let inQ=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch=='"'){ if(inQ&&line[i+1]=='"'){cur+='"'; i++;} else {inQ=!inQ;} }
+      else if(ch==',' && !inQ){ out.push(cur); cur=''; }
+      else cur+=ch;
+    }
+    out.push(cur); return out.map(s=>s.trim());
+  }
+  function normalizeDate(s){
+    s=(s||'').trim();
+    let m=s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if(m){ const y=+m[1], mo=('0'+m[2]).slice(-2), d=('0'+m[3]).slice(-2); return `${y}-${mo}-${d}`; }
+    m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if(m){ const y=+m[3], mo=('0'+m[2]).slice(-2), d=('0'+m[1]).slice(-2); return `${y}-${mo}-${d}`; }
+    try{ return new Date(s).toISOString().slice(0,10);}catch(e){ return s; }
+  }
+  function fmtTime(s){ try{ return new Date(s).toLocaleString('ms-MY',{dateStyle:'medium',timeStyle:'short'});}catch(e){return s||''} }
+  function esc(s){ return (s||'').replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+})();</script>
+</body>
+</html>
